@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>SKY SHOP</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{color-scheme:dark;--bg:#090d18;--panel:#151d2d;--muted:#9ba8bc;--text:#f6f8fc;--accent:#77baff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
+header{padding:20px 16px 12px;background:linear-gradient(135deg,#172d4b,#101827)}
+.logo{font-size:27px;font-weight:900;letter-spacing:2px}.sub{color:#c2d2e8;margin-top:5px;font-size:13px}
+main{padding:14px;max-width:760px;margin:auto}.tools{display:flex;gap:8px;margin:5px 0 15px}
+button{border:0;border-radius:12px;padding:12px 14px;font-weight:700;color:white;background:#2469a8}
+.tools button{flex:1}.tools .active{background:#287a49}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:var(--panel);border-radius:16px;overflow:hidden;border:1px solid #26344b}
+.photo{width:100%;aspect-ratio:1/1;object-fit:cover;background:#202b3d;display:block}
+.info{padding:11px}.name{font-weight:800;font-size:15px;line-height:1.25;min-height:36px}
+.price{font-size:18px;font-weight:900;margin:8px 0}.desc{color:var(--muted);font-size:12px;line-height:1.4;min-height:30px}
+.actions{display:flex;gap:7px;margin-top:10px}.order{flex:1;background:#25864c;font-size:12px;padding:10px 6px}.fav{background:#273c59;padding:9px 11px}
+.empty,.maintenance{padding:38px 16px;text-align:center;background:var(--panel);border-radius:16px;color:#cbd6e6}
+.maintenance h2{font-size:23px}
+footer{text-align:center;color:#77869d;padding:24px;font-size:12px}
+@media(max-width:350px){.grid{gap:8px}.info{padding:9px}.name{font-size:13px}}
+</style>
+</head>
+<body>
+<header><div class="logo">SKY SHOP</div><div class="sub">Стильные находки. Приятные покупки.</div></header>
+<main id="app"><div class="empty">Загружаем магазин…</div></main>
+<footer>SKY SHOP · <a id="channel" href="https://t.me/sky_shop001" style="color:#8dc5ff">Наш канал</a></footer>
+<script>
+const tg=window.Telegram?.WebApp; tg?.ready(); tg?.expand();
+const initData=tg?.initData||"";
+const headers={"Content-Type":"application/json","X-Telegram-Init-Data":initData};
+let products=[], favorites=new Set(), showFav=false;
+const app=document.getElementById("app");
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function request(url,opts={}){const r=await fetch(url,{...opts,headers:{...headers,...opts.headers}});if(!r.ok){const body=await r.json().catch(()=>({}));if(body.subscriptionRequired)throw new Error("SUBSCRIPTION_REQUIRED");throw new Error(body.error||"Ошибка загрузки")}return r.json()}
+function render(){
+ const items=showFav?products.filter(p=>favorites.has(p.id)):products;
+ app.innerHTML=`<div class="tools"><button class="${!showFav?'active':''}" onclick="showFav=false;render()">🛍 Каталог</button><button class="${showFav?'active':''}" onclick="showFav=true;render()">❤️ Избранное</button></div>`+
+ (items.length?`<div class="grid">${items.map(p=>`<article class="card">${p.imageUrl?`<img class="photo" src="${p.imageUrl}" alt="${esc(p.title)}">`:`<div class="photo"></div>`}<div class="info"><div class="name">${esc(p.title)}</div><div class="price">${esc(p.price)} ₽</div><div class="desc">${esc(p.description)}</div><div class="actions"><button class="order" onclick="order('${encodeURIComponent(p.id)}')">Заказать</button><button class="fav" onclick="toggleFav('${encodeURIComponent(p.id)}')">${favorites.has(p.id)?"❤️":"🤍"}</button></div></div></article>`).join("")}</div>`:`<div class="empty">${showFav?"В избранном пока пусто":"Пока товаров нет. Скоро здесь появятся новинки!"}</div>`);
+}
+async function order(encoded){const id=decodeURIComponent(encoded);const p=products.find(x=>x.id===id);if(!p)return;const message=p.order_text||`Здравствуйте! Пишу вам по поводу покупки товара в SKY SHOP.\n\nТовар: ${p.title}\nЦена: ${p.price} ₽\n\nПодскажите, пожалуйста, актуально ли наличие и как оформить заказ?`;const url=`https://t.me/${encodeURIComponent("Salamchik01")}?text=${encodeURIComponent(message)}`;if(tg?.openTelegramLink)tg.openTelegramLink(url);else location.href=url}
+async function toggleFav(encoded){const id=decodeURIComponent(encoded);try{const r=await request(`/api/favorites/${encodeURIComponent(id)}`,{method:"POST",body:"{}"});if(r.favorite)favorites.add(id);else favorites.delete(id);render()}catch(e){alert(e.message)}}
+(async()=>{try{const cfg=await fetch("/api/config").then(r=>r.json());document.getElementById("channel").href=cfg.channelUrl;if(cfg.maintenance){app.innerHTML='<div class="maintenance"><h2>🛠 ТЕХНИЧЕСКИЕ РАБОТЫ</h2><p>Мы скоро вернёмся. Спасибо за ожидание!</p></div>';return}const data=await request("/api/products");products=data.products||[];const fav=await request("/api/favorites");favorites=new Set(fav.ids||[]);render()}catch(e){
+ const msg=e.message||"Ошибка загрузки";
+ if(msg==="SUBSCRIPTION_REQUIRED"){app.innerHTML=`<div class="empty"><h2>📢 Подпишись на канал</h2><p>Чтобы открыть SKY SHOP, подпишись на наш Telegram-канал.</p><p><a href="https://t.me/sky_shop001" style="color:#8dc5ff">Открыть канал</a></p><button onclick="location.reload()">Я подписался · Проверить</button></div>`}
+ else app.innerHTML=`<div class="empty">${esc(msg)}<br><br>Открой магазин через кнопку в Telegram-боте.</div>`
+}})();
+</script>
+</body></html>
